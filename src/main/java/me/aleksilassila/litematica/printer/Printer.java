@@ -41,6 +41,7 @@ public class Printer {
     private Map<Region, List<BlockPos>> regionPositions = new HashMap<>();
     private List<Region> regions = new ArrayList<>(); // Store regions from SimpleArea
     private List<BlockPos> cachedPositions = new ArrayList<>();
+    private int blocksFound = 0;
 
 
 
@@ -177,6 +178,7 @@ public class Printer {
         scanComplete = false;
         cachedPositions.clear();
         regionPositions.clear();
+        blocksFound = 0;
         regions.clear();
         cachedIndex = 0;
 
@@ -291,12 +293,14 @@ public class Printer {
                         regionPositions.get(region).add(pos);
                         addedToRegion = true;
                         logger.info("Added block at pos {} to region {}", pos, region.getName());
+                        blocksFound++;
                         break;
                     }
                 }
                 if (!addedToRegion) {
                     logger.info("Block was not in any region, added to global list. Block: {}", pos);
                     cachedPositions.add(pos);
+                    blocksFound++;
                 }
             }
             blocksScanned++;
@@ -316,9 +320,8 @@ public class Printer {
 
         // Print progress to chat and log
         String progressMsg = String.format(
-            "Scanning... Found %d blocks so far. Last scanned: %s",
-            cachedPositions.size(),
-            cachedPositions.isEmpty() ? "none" : cachedPositions.get(cachedPositions.size() - 1)
+            "Scanning... Found %d blocks so far. ",
+            blocksScanned
         );
         player.sendMessage(
             net.minecraft.text.Text.literal(progressMsg),
@@ -333,9 +336,9 @@ public class Printer {
             }
             scanComplete = true;
             scanning = false;
-            logger.info("Scan complete. Found {} blocks within placement.", cachedPositions.size());
+            logger.info("Scan complete. Found {} blocks within placement.", blocksScanned);
             player.sendMessage(
-                net.minecraft.text.Text.literal("Scan complete. Found " + cachedPositions.size() + " blocks."),
+                net.minecraft.text.Text.literal("Scan complete. Found " + blocksScanned + " blocks."),
                 false
             );
         }
