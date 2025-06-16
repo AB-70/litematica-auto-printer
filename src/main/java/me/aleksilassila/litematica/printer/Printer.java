@@ -31,17 +31,25 @@ public class Printer {
     @NotNull
     public final ClientPlayerEntity player;
     public final MinecraftClient client;
-    private int cachedIndex = 0;
-    private Region currentRegion;
-    private boolean scanComplete = false;
-    private boolean scanning = false;
     private static final int BLOCKS_PER_SCAN_TICK = 500; // Tune as needed
 
 
+    // Curren region being placed.
+    private Region currentRegion;
+    // List of all the regions, with blocks in each.
     private Map<Region, List<BlockPos>> regionPositions = new HashMap<>();
-    private List<Region> regions = new ArrayList<>(); // Store regions from SimpleArea
-    private List<BlockPos> cachedPositions = new ArrayList<>();
+    // List of all the regions.
+    private List<Region> regions = new ArrayList<>();
+    // Total blocks found in scan.
     private int blocksFound = 0;
+    // Current index of the block in currentRegion that is being placed.
+    private int cachedIndex = 0;
+    // Scanning is on or not
+    private boolean scanning = false;
+    // Whether the scan is complete or not.
+    private boolean scanComplete = false;
+    // Currently scanning region.
+    private int currentScanRegionIndex = 0;
 
 
 
@@ -58,21 +66,18 @@ public class Printer {
         if (worldSchematic == null)
             return false;
 
-        // If hotkey is pressed, we toggle the printer
+        // Toggle
+        if (!Configs.PRINT_MODE.getBooleanValue())
+            return false;
+
+        // Start / Restart Scan
         if(Hotkeys.PRINT.getKeybind().isPressed()) {
-            // Reset 
-            cachedPositions = new ArrayList<>();
-            cachedIndex = 0;
-            currentRegion = null;
-            regions = new ArrayList<>();
-            regionPositions.clear();
-            logger.info("Printer reset.");
+            // Reset
+            logger.info("Starting scan. ");
             scanComplete = false;
             scanning = false;
         }
 
-        if (!Configs.PRINT_MODE.getBooleanValue())
-            return false;
 
         // Start or continue scanning if not complete
         if (!scanComplete) {
@@ -99,18 +104,10 @@ public class Printer {
                 return true;
             }
             player.sendMessage(
-                    net.minecraft.text.Text.literal("Placing schematic... "+cachedIndex + " out of "+blocksInRegion.size() + " (region: "+currentRegion.getName()+")"),
+                    net.minecraft.text.Text.literal("Placing schematic... "+cachedIndex + " out of "+blocksFound + " blocks (current region: "+currentRegion.getName()+")"),
                     true
             );
             BlockPos position = blocksInRegion.get(cachedIndex++);
-            place(position);
-            return true;
-        }else if(!cachedPositions.isEmpty() && cachedIndex < cachedPositions.size()){
-            player.sendMessage(
-                    net.minecraft.text.Text.literal("Placing schematic... "+cachedIndex + " out of "+cachedPositions.size()),
-                    true
-            );
-            BlockPos position = cachedPositions.get(cachedIndex++);
             place(position);
             return true;
         }
@@ -176,11 +173,11 @@ public class Printer {
         logger.info("Scanning for reachable blocks...");
         scanning = true;
         scanComplete = false;
-        cachedPositions.clear();
         regionPositions.clear();
         blocksFound = 0;
-        regions.clear();
         cachedIndex = 0;
+        currentRegion = null;
+        regions = new ArrayList<>();
 
         // Use SchematicPlacementManager and SchematicPlacement
         SchematicPlacementManager placementManager =
@@ -215,6 +212,8 @@ public class Printer {
 
         // Get subregions
 
+        totalBlocksScanned = 0;
+        totalBlocksToScan = 0;
         var _regions = placement.getAllSubRegionsPlacements();
         var _boxes = placement.getSubRegionBoxes(SubRegionPlacement.RequiredEnabled.ANY);
         if(_regions != null){
@@ -226,6 +225,7 @@ public class Printer {
                 var _region = new Region(_sr.getName(),_box.copy());
                 regionPositions.put(_region, new ArrayList<>());
                 regions.add(_region);
+                totalBlocksToScan += (_region.maxX - _region.minX + 1) * (_region.maxY - _region.minY + 1) * (_region.maxZ - _region.minZ + 1);
             }
         }
 
@@ -236,29 +236,18 @@ public class Printer {
             enclosingBox.getPos1(), enclosingBox.getPos2(), enclosingBox.getSize());
 
 
+        // Set currentScanRegion to first region in list
+        currentScanRegionIndex = 0;
+        worldSchematic = SchematicWorldHandler.getSchematicWorld();
+        world = player.getWorld();
+        logger.info("Total blocks to scan: {}", totalBlocksToScan);
+        logger.info("Scanning will begin in next tick. Wait.");
+
 
         // Prepare for incremental scan
         scanPlacementOrigin = origin;
         scanPlacementBox = enclosingBox;
         scanPlacementCurrentPos = null;
-        
-        BlockPos min = scanPlacementBox.getPos1();
-        BlockPos max = scanPlacementBox.getPos2();
-
-        int expand = 10;
-        minX = Math.min(min.getX(), max.getX()) - expand;
-        minY = Math.min(min.getY(), max.getY()) - expand;
-        minZ = Math.min(min.getZ(), max.getZ()) - expand;
-        maxX = Math.max(min.getX(), max.getX()) + expand;
-        maxY = Math.max(min.getY(), max.getY()) + expand;
-        maxZ = Math.max(min.getZ(), max.getZ()) + expand;
-
-        totalBlocksToScan = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
-        totalBlocksScanned = 0;
-        worldSchematic = SchematicWorldHandler.getSchematicWorld();
-        world = player.getWorld();
-        logger.info("Total blocks to scan: {}", totalBlocksToScan);
-        logger.info("Scanning will begin in next tick. Wait.");
     }
 
     // New fields for incremental placement scan
@@ -266,12 +255,12 @@ public class Printer {
     private Box scanPlacementBox = null;
     private BlockPos scanPlacementCurrentPos = null;
     private int totalBlocksToScan = 0;
-    private int minX, minY, minZ, maxX, maxY, maxZ;
     private int totalBlocksScanned = 0;
     private WorldSchematic worldSchematic;
     private net.minecraft.world.World world;
     
     private void scanReachablePositionsTick() {
+        var currentScanRegion = regions.get(currentScanRegionIndex);
         int blocksScanned = 0;
 
         if (scanPlacementBox == null || scanPlacementOrigin == null) {
@@ -283,56 +272,40 @@ public class Printer {
 
         // Initialize scan position if needed
         if (scanPlacementCurrentPos == null) {
-            scanPlacementCurrentPos = new BlockPos(minX, minY, minZ);
+            scanPlacementCurrentPos = new BlockPos(currentScanRegion.minX, currentScanRegion.minY, currentScanRegion.minZ);
         }
-
-        var layer = DataManager.getRenderLayerRange();
 
         // Scan positions within the box
         while (blocksScanned < BLOCKS_PER_SCAN_TICK && scanPlacementCurrentPos != null) {
             BlockPos pos = scanPlacementCurrentPos;
-            if(!layer.isPositionWithinRange(pos)){
-                continue;
-            }
+
 
             SchematicBlockState state = new SchematicBlockState(player.getWorld(), worldSchematic, pos);
-            if (!state.targetState.isAir() && !state.currentState.equals(state.targetState))
+            if (!state.targetState.isAir())
             {
-                boolean addedToRegion = false;
-                for (Region region : regions) {
-                    if (region.containsPosition(pos)) {
-                        regionPositions.get(region).add(pos);
-                        addedToRegion = true;
-                        // logger.info("Added block at pos {} to region {}", pos, region.getName());
-                        blocksFound++;
-                        break;
-                    }
-                }
-                if (!addedToRegion) {
-                    // logger.info("Block was not in any region, added to global list. Block: {}", pos);
-                    cachedPositions.add(pos);
-                    blocksFound++;
-                }
+                // Add to current region
+                regionPositions.get(currentScanRegion).add(pos);
+                blocksFound += 1;
             }
             blocksScanned++;
 
             // Increment position (x, then z, then y)
             int x = pos.getX(), y = pos.getY(), z = pos.getZ();
-            if (x <= maxX) {
+            if (x <= currentScanRegion.maxX) {
                 scanPlacementCurrentPos = new BlockPos(x + 1, y, z);
-            } else if (z <= maxZ) {
-                scanPlacementCurrentPos = new BlockPos(minX, y, z + 1);
-            } else if (y <= maxY) {
-                scanPlacementCurrentPos = new BlockPos(minX, y + 1, minZ);
+            } else if (z <= currentScanRegion.maxZ) {
+                scanPlacementCurrentPos = new BlockPos(currentScanRegion.minX, y, z + 1);
+            } else if (y <= currentScanRegion.maxY) {
+                scanPlacementCurrentPos = new BlockPos(currentScanRegion.minX, y + 1, currentScanRegion.minZ);
             } else {
-                scanPlacementCurrentPos = null; // Finished this placement
+                scanPlacementCurrentPos = null; // Finished this region
             }
         }
         totalBlocksScanned += blocksScanned;
 
         // Print progress to chat and log
         String progressMsg = String.format(
-            "Scanning... Found %d blocks so far. Progress: %d",
+            "Scanning region: %s... Found %d blocks so far. Total Progress: %d",currentScanRegion.getName(),
             blocksFound, 
             totalBlocksScanned / totalBlocksToScan * 100
         );
@@ -340,20 +313,21 @@ public class Printer {
             net.minecraft.text.Text.literal(progressMsg),
             true
         );
-        // logger.info(progressMsg);
-
-        // If finished all positions in placement
+        // If finished all positions in region
         if (scanPlacementCurrentPos == null) {
-            if(!regions.isEmpty()){
+            if(currentScanRegionIndex < regions.size() - 1){
+                currentScanRegionIndex++;
+            }else {
+                // Finished all regions
                 currentRegion = regions.getFirst();
+                scanComplete = true;
+                scanning = false;
+                logger.info("Scan complete. Found {} blocks within placement.", blocksFound);
+                player.sendMessage(
+                        net.minecraft.text.Text.literal("Scan complete. Found " + blocksFound + " blocks."),
+                        false
+                );
             }
-            scanComplete = true;
-            scanning = false;
-            logger.info("Scan complete. Found {} blocks within placement.", blocksFound);
-            player.sendMessage(
-                net.minecraft.text.Text.literal("Scan complete. Found " + blocksFound + " blocks."),
-                false
-            );
         }
     }
 

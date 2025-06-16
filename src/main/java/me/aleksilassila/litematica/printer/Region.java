@@ -7,9 +7,20 @@ public class Region {
     private final String name;
     private final Box box;
 
+    public final int minX, minY, minZ, maxX, maxY, maxZ;
+
     public Region(String name, Box box) {
         this.name = name;
         this.box = box;
+        BlockPos min = box.getPos1();
+        BlockPos max = box.getPos2();
+
+        this.minX = Math.min(min.getX(), max.getX()) ;
+        minY = Math.min(min.getY(), max.getY()) ;
+        minZ = Math.min(min.getZ(), max.getZ()) ;
+        maxX = Math.max(min.getX(), max.getX()) ;
+        maxY = Math.max(min.getY(), max.getY()) ;
+        maxZ = Math.max(min.getZ(), max.getZ()) ;
     }
 
     public String getName() {
@@ -21,13 +32,11 @@ public class Region {
     }
 
     public boolean containsPosition(BlockPos pos) {
-        BlockPos min = box.getPos1();
-        BlockPos max = box.getPos2();
-        return pos.getX() >= Math.min(min.getX(), max.getX()) &&
-               pos.getX() <= Math.max(min.getX(), max.getX()) &&
-               pos.getY() >= Math.min(min.getY(), max.getY()) &&
-               pos.getY() <= Math.max(min.getY(), max.getY()) &&
-               pos.getZ() >= Math.min(min.getZ(), max.getZ()) &&
-               pos.getZ() <= Math.max(min.getZ(), max.getZ());
+        return pos.getX() >= minX &&
+               pos.getX() <= maxX &&
+               pos.getY() >= minY &&
+               pos.getY() <= maxY &&
+               pos.getZ() >= minZ &&
+               pos.getZ() <= maxZ;
     }
 }
