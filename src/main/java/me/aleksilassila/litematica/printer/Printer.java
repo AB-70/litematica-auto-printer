@@ -241,13 +241,36 @@ public class Printer {
         scanPlacementOrigin = origin;
         scanPlacementBox = enclosingBox;
         scanPlacementCurrentPos = null;
+        
+        BlockPos min = scanPlacementBox.getPos1();
+        BlockPos max = scanPlacementBox.getPos2();
+
+        int expand = 10;
+        minX = Math.min(min.getX(), max.getX()) - expand;
+        minY = Math.min(min.getY(), max.getY()) - expand;
+        minZ = Math.min(min.getZ(), max.getZ()) - expand;
+        maxX = Math.max(min.getX(), max.getX()) + expand;
+        maxY = Math.max(min.getY(), max.getY()) + expand;
+        maxZ = Math.max(min.getZ(), max.getZ()) + expand;
+
+        totalBlocksToScan = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+        totalBlocksScanned = 0;
+        worldSchematic = SchematicWorldHandler.getSchematicWorld();
+        world = player.getWorld();
+        logger.info("Total blocks to scan: {}", totalBlocksToScan);
+        logger.info("Scanning will begin in next tick. Wait.");
     }
 
     // New fields for incremental placement scan
     private BlockPos scanPlacementOrigin = null;
     private Box scanPlacementBox = null;
     private BlockPos scanPlacementCurrentPos = null;
-
+    private int totalBlocksToScan = 0;
+    private int minX, minY, minZ, maxX, maxY, maxZ;
+    private int totalBlocksScanned = 0;
+    private WorldSchematic worldSchematic;
+    private net.minecraft.world.World world;
+    
     private void scanReachablePositionsTick() {
         int blocksScanned = 0;
 
@@ -257,24 +280,12 @@ public class Printer {
             return;
         }
 
-        BlockPos min = scanPlacementBox.getPos1();
-        BlockPos max = scanPlacementBox.getPos2();
-
-        int expand = 10;
-        int minX = Math.min(min.getX(), max.getX()) - expand;
-        int minY = Math.min(min.getY(), max.getY()) - expand;
-        int minZ = Math.min(min.getZ(), max.getZ()) - expand;
-        int maxX = Math.max(min.getX(), max.getX()) + expand;
-        int maxY = Math.max(min.getY(), max.getY()) + expand;
-        int maxZ = Math.max(min.getZ(), max.getZ()) + expand;
 
         // Initialize scan position if needed
         if (scanPlacementCurrentPos == null) {
             scanPlacementCurrentPos = new BlockPos(minX, minY, minZ);
         }
 
-        WorldSchematic worldSchematic = SchematicWorldHandler.getSchematicWorld();
-        net.minecraft.world.World world = player.getWorld();
         var layer = DataManager.getRenderLayerRange();
 
         // Scan positions within the box
@@ -292,13 +303,13 @@ public class Printer {
                     if (region.containsPosition(pos)) {
                         regionPositions.get(region).add(pos);
                         addedToRegion = true;
-                        logger.info("Added block at pos {} to region {}", pos, region.getName());
+                        // logger.info("Added block at pos {} to region {}", pos, region.getName());
                         blocksFound++;
                         break;
                     }
                 }
                 if (!addedToRegion) {
-                    logger.info("Block was not in any region, added to global list. Block: {}", pos);
+                    // logger.info("Block was not in any region, added to global list. Block: {}", pos);
                     cachedPositions.add(pos);
                     blocksFound++;
                 }
@@ -317,17 +328,19 @@ public class Printer {
                 scanPlacementCurrentPos = null; // Finished this placement
             }
         }
+        totalBlocksScanned += blocksScanned;
 
         // Print progress to chat and log
         String progressMsg = String.format(
-            "Scanning... Found %d blocks so far. ",
-            blocksScanned
+            "Scanning... Found %d blocks so far. Progress: %d",
+            blocksFound, 
+            totalBlocksScanned / totalBlocksToScan * 100
         );
         player.sendMessage(
             net.minecraft.text.Text.literal(progressMsg),
             true
         );
-        logger.info(progressMsg);
+        // logger.info(progressMsg);
 
         // If finished all positions in placement
         if (scanPlacementCurrentPos == null) {
@@ -336,9 +349,9 @@ public class Printer {
             }
             scanComplete = true;
             scanning = false;
-            logger.info("Scan complete. Found {} blocks within placement.", blocksScanned);
+            logger.info("Scan complete. Found {} blocks within placement.", blocksFound);
             player.sendMessage(
-                net.minecraft.text.Text.literal("Scan complete. Found " + blocksScanned + " blocks."),
+                net.minecraft.text.Text.literal("Scan complete. Found " + blocksFound + " blocks."),
                 false
             );
         }
