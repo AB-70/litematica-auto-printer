@@ -3,9 +3,8 @@ package me.aleksilassila.litematica.printer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -61,13 +60,16 @@ public class Printer {
     private WorldSchematic worldSchematic;
     private net.minecraft.world.World world;
 
-    private int lastSaveBlockCount = 0;
+    private long lastSaveTime = 0;
+
+    private ArrayList<BlockPos> fillEmptyList = new ArrayList<>();
 
 
 
     public Printer(@NotNull MinecraftClient client, @NotNull ClientPlayerEntity player) {
         this.player = player;
         this.client = client;
+        loadState();
     }
 
     public boolean onGameTick() {
@@ -77,9 +79,6 @@ public class Printer {
         if (worldSchematic == null)
             return false;
 
-        // Toggle
-        if (!Configs.PRINT_MODE.getBooleanValue())
-            return false;
 
         // Start / Restart Scan
         if(Hotkeys.RESET.getKeybind().isPressed()) {
@@ -90,6 +89,10 @@ public class Printer {
         }
 
 
+        // Toggle
+        if (!Configs.PRINT_MODE.getBooleanValue())
+            return false;
+
         // Start or continue scanning if not complete
         if (!scanComplete) {
             if (!scanning) {
@@ -99,33 +102,54 @@ public class Printer {
             scanReachablePositionsTick();
             return false;
         }
+        if(!fillEmptyList.isEmpty()){
+            // Fill next
+            fillEmptyBlocks();
+            return true;
+        }
         PlayerAbilities abilities = player.getAbilities();
         if (!abilities.allowModifyWorld)
             return false;
 
-        // Process one block per tick
         if(!regions.isEmpty() && currentRegionIndex != -1 && currentRegionIndex < regions.size()){
             List<BlockPos> blocksInRegion = regions.get(currentRegionIndex).positions;
-            if(currentBlockIndex >= blocksInRegion.size() && currentRegionIndex < regions.size() - 1){
-                // Set next region
-                currentRegionIndex++;
-                currentBlockIndex = 0;
-                return true;
+            for(var i = 0; i < Configs.PLACE_BLOCKS_PER_TICK.getIntegerValue(); i++){
+                if(currentBlockIndex >= blocksInRegion.size()){
+                    // Set next region
+                    currentRegionIndex++;
+                    currentBlockIndex = 0;
+                    break;
+                }
+                BlockPos position = blocksInRegion.get(currentBlockIndex++);
+                place(position);
+                totalBlocksPlaced++;
             }
             player.sendMessage(
                     net.minecraft.text.Text.literal("Placing schematic... "+ totalBlocksPlaced + " out of "+blocksFound + " blocks (current region: "+regions.get(currentRegionIndex).getName()+")"),
                     true
             );
-            BlockPos position = blocksInRegion.get(currentBlockIndex++);
-            place(position);
-            totalBlocksPlaced++;
             // Check how many blocks have been processed since last save
-            if(totalBlocksPlaced - lastSaveBlockCount >= Configs.SAVE_INTERVAL.getIntegerValue()){
+            var _now = new Date().getTime();
+            if(_now - lastSaveTime >= Configs.SAVE_INTERVAL.getIntegerValue()){
                 // Save
                 saveState();
-                lastSaveBlockCount = totalBlocksPlaced;
+                lastSaveTime = _now;
             }
             return true;
+        }
+
+        // If completed
+        if(currentRegionIndex >= regions.size()){
+            currentRegionIndex = -1;
+            regions.clear();
+            blocksFound = 0;
+            currentBlockIndex = 0;
+            currentRegionIndex = -1;
+            currentScanRegionIndex = 0;
+            totalBlocksScanned = 0;
+            totalBlocksToScan = 0;
+            totalBlocksPlaced = 0;
+            clearState();
         }
 
         return false;
@@ -198,6 +222,7 @@ public class Printer {
         totalBlocksScanned = 0;
         totalBlocksToScan = 0;
         totalBlocksPlaced = 0;
+        fillEmptyList.clear();
 
         // Use SchematicPlacementManager and SchematicPlacement
         SchematicPlacementManager placementManager =
@@ -248,6 +273,27 @@ public class Printer {
         scanPlacementCurrentPos = null;
     }
 
+    private void fillEmptyBlocks(){
+        if(fillEmptyList.isEmpty()){
+            saveState();
+            return;
+        }
+        for(var i = 0; i < Configs.PLACE_BLOCKS_PER_TICK.getIntegerValue(); i++){
+            BlockPos pos = fillEmptyList.getLast();
+            String command = String.format("setblock %d %d %d %s", pos.getX(), pos.getY(), pos.getZ(), "minecraft:air replace");
+            player.networkHandler.sendChatCommand(command);
+            fillEmptyList.removeLast();
+            if(fillEmptyList.isEmpty()){break;}
+        }
+        String progressMsg = String.format(
+                "Filling empty blocks: Remaining: %d blocks.",
+                fillEmptyList.size()
+        );
+        player.sendMessage(
+                net.minecraft.text.Text.literal(progressMsg),
+                true
+        );
+    }
     
     private void scanReachablePositionsTick() {
         var currentScanRegion = regions.get(currentScanRegionIndex);
@@ -271,14 +317,10 @@ public class Printer {
                 blocksFound += 1;
             }
             // If local block state is NOT air, and FILL_EMPTY is toggled, we check if current Y is within range of fill empty parameter
-            if(state.targetState.isAir() && Configs.FILL_EMPTY.getBooleanValue()){
+            if(!state.currentState.isAir() && Configs.FILL_EMPTY.getBooleanValue()){
                 var _maxY = Configs.FILL_HEIGHT.getIntegerValue();
                 if(pos.getY() <= _maxY){
-                    // Fill it with air.
-                    String command = String.format("setblock %d %d %d %s", pos.getX(), pos.getY(), pos.getZ(), "minecraft:air");
-
-                    // Send command
-                    player.networkHandler.sendChatCommand(command);
+                    fillEmptyList.add(pos);
                 }
             }
             blocksScanned++;
@@ -328,10 +370,11 @@ public class Printer {
             }
         }else{
             // Check how many blocks have been processed since last save
-            if(totalBlocksScanned - lastSaveBlockCount >= Configs.SAVE_INTERVAL.getIntegerValue()){
+            var _now = new Date().getTime();
+            if(_now - lastSaveTime >= Configs.SAVE_INTERVAL.getIntegerValue()){
                 // Save
                 saveState();
-                lastSaveBlockCount = totalBlocksScanned;
+                lastSaveTime = _now;
             }
         }
     }
@@ -374,11 +417,32 @@ public class Printer {
             regionsArray.add(_rJson);
         }
         obj.add("regions", regionsArray);
+
+        JsonArray fillEmptyArray = new JsonArray();
+        for(BlockPos _pos : fillEmptyList){
+            var _posObj = new JsonObject();
+            _posObj.add("pos", JsonUtils.blockPosToJson(_pos));
+            fillEmptyArray.add(_posObj);
+        }
+        obj.add("fillEmpty", fillEmptyArray);
         JsonUtils.writeJsonToFile(obj, new java.io.File("scanner_state.json"));
+    }
+
+    private void clearState(){
+        if(!Paths.get("scanner_state.json").toFile().exists() || !Paths.get("scanner_state.json").toFile().isFile()){
+            return;
+        }
+        Paths.get("scanner_state.json").toFile().delete();
     }
 
     private void loadState() {
         try {
+            if(!Paths.get("scanner_state.json").toFile().exists() || !Paths.get("scanner_state.json").toFile().isFile()){
+                return;
+            }
+
+            worldSchematic = SchematicWorldHandler.getSchematicWorld();
+            world = player.getWorld();
             String json = new String(Files.readAllBytes(Paths.get("scanner_state.json")));
             JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
 
@@ -405,6 +469,13 @@ public class Printer {
                 if (region != null) {
                     regions.add(region);
                 }
+            }
+
+            fillEmptyList.clear();
+            JsonArray fillEmptyArray = obj.getAsJsonArray("fillEmpty");
+            for (JsonElement fillEmptyElem : fillEmptyArray) {
+                var _pos = JsonUtils.blockPosFromJson(fillEmptyElem.getAsJsonObject(), "pos");
+                fillEmptyList.add(_pos);
             }
         } catch (Exception e) {
             // Handle file not found or parsing errors

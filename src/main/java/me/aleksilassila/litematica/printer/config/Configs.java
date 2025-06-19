@@ -9,7 +9,7 @@ import fi.dy.masa.malilib.config.options.ConfigInteger;
 
 public class Configs
 {
-    public static final ConfigInteger SAVE_INTERVAL = new ConfigInteger("saveInterval", 500, 100, 10000,
+    public static final ConfigInteger SAVE_INTERVAL = new ConfigInteger("saveInterval", 1000 * 60, 1000  * 60, 1000 * 60 * 60,
             "litematica-printer.config.generic.comment.saveInterval")
             .translatedName("litematica-printer.config.generic.name.saveInterval");
 
