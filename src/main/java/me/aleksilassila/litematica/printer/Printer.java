@@ -113,6 +113,7 @@ public class Printer {
 
         if(!regions.isEmpty() && currentRegionIndex != -1 && currentRegionIndex < regions.size()){
             List<BlockPos> blocksInRegion = regions.get(currentRegionIndex).positions;
+            var currentRegionName = regions.get(currentRegionIndex).getName();
             for(var i = 0; i < Configs.PLACE_BLOCKS_PER_TICK.getIntegerValue(); i++){
                 if(currentBlockIndex >= blocksInRegion.size()){
                     // Set next region
@@ -125,7 +126,7 @@ public class Printer {
                 totalBlocksPlaced++;
             }
             player.sendMessage(
-                    net.minecraft.text.Text.literal("Placing schematic... "+ totalBlocksPlaced + " out of "+blocksFound + " blocks (current region: "+regions.get(currentRegionIndex).getName()+")"),
+                    net.minecraft.text.Text.literal("Placing schematic... "+ totalBlocksPlaced + " out of "+blocksFound + " blocks (current region: "+currentRegionName+")"),
                     true
             );
             // Check how many blocks have been processed since last save
@@ -202,7 +203,7 @@ public class Printer {
         }
         
         if (properties.length() > 0) {
-            return blockName + "[" + properties.toString() + "]";
+            return blockName + "[" + properties.toString().toLowerCase() + "]";
         } else {
             return blockName;
         }
