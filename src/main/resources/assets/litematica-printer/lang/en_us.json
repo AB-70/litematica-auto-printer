@@ -5,6 +5,7 @@
   "litematica-printer.config.generic.name.placeBlocksPerTick": "placeBlocksPerTick",
   "litematica-printer.config.generic.name.maxFillHeight": "maxFillHeight",
   "litematica-printer.config.generic.name.fillEmptyBeforePrint": "fillEmptyBeforePrint",
+  "litematica-printer.config.generic.name.replaceDirtWithGrass": "replaceDirtWithGrass",
 
   "litematica-printer.config.generic.prettyName.saveInterval": "Saving Interval (MS)",
   "litematica-printer.config.generic.prettyName.scanBlocksPerTick": "Scan Blocks Per Tick",
@@ -12,6 +13,7 @@
   "litematica-printer.config.generic.prettyName.placeBlocksPerTick": "Place Blocks Per Tick",
   "litematica-printer.config.generic.prettyName.maxFillHeight": "Max Fill Height",
   "litematica-printer.config.generic.prettyName.fillEmptyBeforePrint": "Fill Empty Before Print",
+  "litematica-printer.config.generic.prettyName.replaceDirtWithGrass": "Replace Dirt with Grass",
 
   "litematica-printer.config.generic.comment.printingMode": "Toggle the auto print on or off. ",
   "litematica-printer.config.generic.comment.saveInterval": "Save the progress in JSON file every specified interval in milliseconds.",
@@ -19,6 +21,7 @@
   "litematica-printer.config.generic.comment.placeBlocksPerTick": "Number of blocks to place per tick during placement.",
   "litematica-printer.config.generic.comment.maxFillHeight": "Maximum fill height when fill empty is enabled. Blocks starting from bottom of the placement upto this position will be filled with air.",
   "litematica-printer.config.generic.comment.fillEmptyBeforePrint": "Whether to fill blocks with air before placement, upto maxFillHeight from bottomY.",
+  "litematica-printer.config.generic.comment.replaceDirtWithGrass": "Replaces dirt blocks below schematic with grass so the build looks natural.",
 
   "litematica-printer.config.hotkeys.name.reset": "reset",
   "litematica-printer.config.hotkeys.name.togglePrintingMode": "togglePrintingMode",

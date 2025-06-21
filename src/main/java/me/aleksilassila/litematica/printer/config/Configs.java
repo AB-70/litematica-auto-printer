@@ -36,6 +36,12 @@ public class Configs
             .translatedName("litematica-printer.config.generic.name.printingMode");
 
 
+    public static final ConfigBoolean REPLACE_DIRT_WITH_GRASS = new ConfigBoolean("replaceDirtWithGrass", false,
+            "litematica-printer.config.generic.comment.replaceDirtWithGrass",
+            "litematica-printer.config.generic.prettyName.replaceDirtWithGrass")
+            .translatedName("litematica-printer.config.generic.name.replaceDirtWithGrass");
+
+
 
     public static ImmutableList<IConfigBase> getConfigList()
     {
@@ -46,6 +52,7 @@ public class Configs
         list.add(PLACE_BLOCKS_PER_TICK);
         list.add(FILL_HEIGHT);
         list.add(FILL_EMPTY);
+        list.add(REPLACE_DIRT_WITH_GRASS);
 
         return ImmutableList.copyOf(list);
     }

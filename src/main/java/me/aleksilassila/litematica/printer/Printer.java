@@ -3,8 +3,11 @@ package me.aleksilassila.litematica.printer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -201,6 +204,12 @@ public class Printer {
             }
             properties.append(property.getName()).append("=").append(state.get(property).toString());
         }
+
+        // If replace dirt with grass is set
+        if(blockName.equals("minecraft:dirt") && Configs.REPLACE_DIRT_WITH_GRASS.getBooleanValue()){
+            // Set it to minecraft:grass
+            blockName = "minecraft:grass_block";
+        }
         
         if (properties.length() > 0) {
             return blockName + "[" + properties.toString().toLowerCase() + "]";
@@ -261,6 +270,43 @@ public class Printer {
             regions.add(_region);
             totalBlocksToScan += (_region.maxX - _region.minX + 1) * (_region.maxY - _region.minY + 1) * (_region.maxZ - _region.minZ + 1);
         }
+
+        // Sort regions
+        regions.sort(new Comparator<Region>() {
+            private Pattern numberPattern = Pattern.compile("\\d+");
+
+            @Override
+            public int compare(Region o1, Region o2) {
+                Integer num1 = extractNumber(o1.getName());
+                Integer num2 = extractNumber(o2.getName());
+
+                // If both have no numbers, maintain original order
+                if (num1 == null && num2 == null) {
+                    return 0;
+                }
+
+                // If only o1 has no number, it comes first
+                if (num1 == null) {
+                    return -1;
+                }
+
+                // If only o2 has no number, it comes first
+                if (num2 == null) {
+                    return 1;
+                }
+
+                // Both have numbers, compare them
+                return num1.compareTo(num2);
+            }
+
+            private Integer extractNumber(String name) {
+                Matcher matcher = numberPattern.matcher(name);
+                if (matcher.find()) {
+                    return Integer.parseInt(matcher.group());
+                }
+                return null;
+            }
+        });
 
         // Set currentScanRegion to first region in list
         currentScanRegionIndex = 0;
